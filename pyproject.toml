@@ -1,0 +1,21 @@
+[project]
+name = "pace"
+version = "0.1.0"
+description = "Personality Accentuating Conversational Engine (PACE)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "chromadb>=1.0.13",
+    "langchain>=0.3.26",
+    "langchain-groq>=0.3.4",
+    "langchain-litellm==0.1.4",
+    "langchain-mcp-adapters>=0.1.8",
+    "langgraph>=0.5.0",
+    "litellm>=1.73.6",
+    "mcp>=1.10.1",
+    "mem0ai[graph]>=0.1.113",
+    "ollama>=0.5.1",
+    "pre-commit>=4.2.0",
+    "python-dotenv>=1.1.1",
+    "rich>=14.0.0",
+]
