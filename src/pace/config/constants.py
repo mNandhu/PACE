@@ -27,16 +27,16 @@ mem0_config = {
     "embedder": {
         "provider": "ollama",
         "config": {
-            "model": "hf.co/Qwen/Qwen3-Embedding-8B-GGUF:f16", # "hf.co/Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0",
+            "model": "hf.co/Qwen/Qwen3-Embedding-8B-GGUF:f16",  # "hf.co/Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0",
             "ollama_base_url": "http://localhost:11435",
-            "embedding_dims": 4096 # 1024,
+            "embedding_dims": 4096,  # 1024,
         },
     },
     "vector_store": {
         "provider": "milvus",
         "config": {
             "collection_name": "pace_{user_name}_{persona_name}",  # Template: {user_name} and {persona_name} are replaced at runtime
-            "embedding_model_dims": 4096,  #1024,
+            "embedding_model_dims": 4096,  # 1024,
         },
     },
     "graph_store": {
@@ -56,19 +56,12 @@ llm_configs = {
         "temperature": 0.3,
         "max_tokens": 4000,
         "timeout": 60,
-    },
-    "worker_ant_llm": {
-        "model": "gemini/gemini-2.5-flash-preview-04-17",  # Fast worker for analysis
-        "temperature": 0.1,
-        "max_tokens": 1000,
-        "timeout": 30,
-    },
+    }
 }
 
 # Token Management Settings
 token_limits = {
     "foundational_llm_max_prompt_tokens": 32768,  # Max tokens for full prompt
-    "worker_ant_max_prompt_tokens": 4000,  # Max tokens for worker prompts
     "conversation_history_max_tokens": 32768,  # Max tokens for conversation history
 }
 
@@ -98,8 +91,6 @@ app_settings = {
 
 # Graph Logic Settings
 graph_logic_settings = {
-    "disable_worker_ant": os.getenv("PACE_DISABLE_WORKER_ANT", "false").lower()
-    == "true",  # Environment variable support
     "max_memories_retrieved": 10,  # Max memories to retrieve in a single search
     "use_reranking": False,  # Enable reranking for memory search results
 }
