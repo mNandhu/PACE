@@ -76,6 +76,11 @@ conversation_settings: dict[str, str] = {
     "max_history_turns_for_prompt": "20",  # Maximum conversation turns to include
 }
 
+# Persona Settings
+persona_settings = {
+    "personas_dir": "Assistant/characters",
+}
+
 # Application Settings
 app_settings = {
     "user_id": "kiruthik_main_user",

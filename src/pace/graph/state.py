@@ -9,6 +9,7 @@ from typing import Dict, Any, Optional
 from typing_extensions import TypedDict
 
 from langchain_core.messages import AnyMessage
+from src.pace.config.persona import Persona
 
 
 class PaceState(TypedDict):
@@ -22,6 +23,7 @@ class PaceState(TypedDict):
     # Input data
     current_user_input: str
     session_id: Optional[str]
+    persona: Optional[Persona]  # Persona object containing character info
 
     # Context identification results
     distilled_context_summary: str

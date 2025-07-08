@@ -9,13 +9,14 @@ import json
 import logging
 import os
 import tiktoken
+import copy
 from datetime import datetime
 from typing import Dict, Any, Optional, List
 from mem0 import Memory
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
 
 from src.pace.config.constants import mem0_config, conversation_settings
-from pace.utils.message_conversion import (
+from src.pace.utils.message_conversion import (
     convert_dict_to_messages,
 )
 
@@ -32,23 +33,37 @@ class MemoryManager:
     """
 
     def __init__(
-        self, config: Optional[Dict[str, Any]] = None, user_id: Optional[str] = None
+        self,
+        config: Optional[Dict[str, Any]] = None,
+        user_name: str = "default_user",
+        persona_name: str = "default_persona",
     ):
         """
         Initialize the MemoryManager with Mem0 configuration.
 
         Args:
             config: Configuration dictionary for Mem0. If None, uses default from config.py
-            user_id: Optional user identifier for memory operations
+            user_name: The name of the user.
+            persona_name: The name of the persona.
 
         Raises:
             Exception: If Mem0 initialization fails
         """
-        self.user_id = user_id or "default_user"
+        self.user_id = user_name  # Mem0 uses user_id to identify the user
+        self.persona_name = persona_name
         self.mem0_instance: Optional[Memory] = None
 
-        # Use provided config or fall back to imported mem0_config
-        self.config = config if config is not None else mem0_config
+        # Use provided config or fall back to imported mem0_config, making a deep copy
+        base_config = (
+            copy.deepcopy(config) if config is not None else copy.deepcopy(mem0_config)
+        )
+
+        # Dynamically set the collection name to isolate memories per user and persona
+        collection_name = f"pace_{self.user_id}_{self.persona_name}"
+        if "vector_store" in base_config and "config" in base_config["vector_store"]:
+            base_config["vector_store"]["config"]["collection_name"] = collection_name
+
+        self.config = base_config
 
         # Initialize tokenizer for token counting
         try:
@@ -69,7 +84,9 @@ class MemoryManager:
         to catch and log any initialization issues.
         """
         try:
-            logger.info(f"Initializing Mem0 with config for user: {self.user_id}")
+            logger.info(
+                f"Initializing Mem0 with config for user: {self.user_id}, persona: {self.persona_name}"
+            )
             self.mem0_instance = Memory.from_config(self.config)
             logger.info("Mem0 instance successfully initialized")
 
@@ -104,7 +121,7 @@ class MemoryManager:
 
         try:
             logger.info(
-                f"Adding conversation turn for user {self.user_id}, session: {session_id}"
+                f"Adding conversation turn for user {self.user_id}, persona: {self.persona_name}, session: {session_id}"
             )
             logger.debug(f"Messages to add: {len(messages)} messages")
             # Call Mem0's add method with user_id
@@ -145,7 +162,7 @@ class MemoryManager:
 
         try:
             logger.info(
-                f"Searching memories for user {self.user_id}, session: {session_id}"
+                f"Searching memories for user {self.user_id}, persona: {self.persona_name}, session: {session_id}"
             )
             logger.debug(f"Query: '{query_text}', limit: {limit}")
             # Call Mem0's search method
@@ -180,7 +197,9 @@ class MemoryManager:
             raise Exception(error_msg)
 
         try:
-            logger.info(f"Resetting all memories for user {self.user_id}")
+            logger.info(
+                f"Resetting all memories for user {self.user_id}, persona: {self.persona_name}"
+            )
 
             # Use Mem0's reset method to clear all memories
             self.mem0_instance.reset()
@@ -362,6 +381,7 @@ class MemoryManager:
             "user_input": current_user_input,
             "final_response": final_response,
             "user_id": self.user_id,
+            "persona_name": self.persona_name,
         }
 
         conversations.append(new_entry)
