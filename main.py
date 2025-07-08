@@ -494,9 +494,21 @@ class PACE_CLI:
                         metadata = result_state.get("processing_metadata", {})
                         if metadata:
                             nodes_executed = metadata.get("nodes_executed", [])
-                            console.print(
-                                f"[dim]🔧 Nodes executed: {' -> '.join(nodes_executed)}[/dim]"
-                            )
+                            node_timings = metadata.get("node_timings", {})
+                            
+                            # Format node execution with timings
+                            if node_timings:
+                                node_info = []
+                                for node in nodes_executed:
+                                    timing = node_timings.get(node, 0.0)
+                                    node_info.append(f"{node} ({timing:.3f}s)")
+                                console.print(
+                                    f"[dim]🔧 Nodes executed: {' -> '.join(node_info)}[/dim]"
+                                )
+                            else:
+                                console.print(
+                                    f"[dim]🔧 Nodes executed: {' -> '.join(nodes_executed)}[/dim]"
+                                )
 
                     self.conversation_count += 1
                 else:

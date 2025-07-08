@@ -37,4 +37,4 @@ class PaceState(TypedDict):
     messages: list[AnyMessage]
 
     # Metadata and tracking
-    processing_metadata: Dict[str, Any]
+    processing_metadata: Dict[str, Any]  # Contains: pipeline_id, start_time, nodes_executed, node_timings

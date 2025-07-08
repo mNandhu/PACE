@@ -7,6 +7,7 @@ of the PACE conversation processing pipeline.
 
 import logging
 import uuid
+import time
 
 from typing import Dict, Any
 from src.pace.config.constants import token_limits, graph_logic_settings
@@ -32,13 +33,15 @@ def start_node(state: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Updated state with initialized metadata
     """
+    node_start_time = time.time()
     logger.info("Starting PACE conversation processing pipeline")
 
     # Initialize processing metadata
     state["processing_metadata"] = {
         "pipeline_id": str(uuid.uuid4()),
-        "start_time": None,  # Will be set by other nodes as needed
+        "start_time": node_start_time,
         "nodes_executed": ["start_node"],
+        "node_timings": {},  # Will store timing for each node
     }
 
     # Ensure required fields exist
@@ -53,6 +56,10 @@ def start_node(state: Dict[str, Any]) -> Dict[str, Any]:
     if "messages" not in state:
         state["messages"] = []
 
+    # Record timing for this node
+    node_execution_time = time.time() - node_start_time
+    state["processing_metadata"]["node_timings"]["start_node"] = node_execution_time
+
     logger.debug(
         f"Pipeline initialized with ID: {state['processing_metadata']['pipeline_id']}"
     )
@@ -63,6 +70,7 @@ def identify_context_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Uses user input to for memory search and identifies relevant context using mem0's search and reranking capabilities.
     """
+    node_start_time = time.time()
     logger.info("Executing context identification node")
     state["processing_metadata"]["nodes_executed"].append("identify_context_node")
     current_user_input = state.get("current_user_input", "")
@@ -72,6 +80,9 @@ def identify_context_node(state: Dict[str, Any]) -> Dict[str, Any]:
     if not current_user_input:
         logger.warning("No user input provided to identify_context_node")
         state["distilled_context_summary"] = ""
+        # Record timing even for early return
+        node_execution_time = time.time() - node_start_time
+        state["processing_metadata"]["node_timings"]["identify_context_node"] = node_execution_time
         return state
 
     try:
@@ -117,11 +128,19 @@ def identify_context_node(state: Dict[str, Any]) -> Dict[str, Any]:
             logger.info("No usable memories found in search results")
 
         state["distilled_context_summary"] = context_summary
+        
+        # Record timing for this node
+        node_execution_time = time.time() - node_start_time
+        state["processing_metadata"]["node_timings"]["identify_context_node"] = node_execution_time
+        
         return state
 
     except Exception as e:
         logger.error(f"Error in identify_context_node: {str(e)}")
         state["distilled_context_summary"] = ""
+        # Record timing even for error case
+        node_execution_time = time.time() - node_start_time
+        state["processing_metadata"]["node_timings"]["identify_context_node"] = node_execution_time
         return state
 
 
@@ -139,6 +158,7 @@ def foundational_llm_node(state: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Updated state with Persona's response
     """
+    node_start_time = time.time()
     logger.info("Executing foundational LLM node")
 
     # Track node execution
@@ -161,6 +181,9 @@ def foundational_llm_node(state: Dict[str, Any]) -> Dict[str, Any]:
             fallback_msg = "I'm sorry, I didn't receive any input from you."
 
         state["final_response"] = fallback_msg
+        # Record timing for early return
+        node_execution_time = time.time() - node_start_time
+        state["processing_metadata"]["node_timings"]["foundational_llm_node"] = node_execution_time
         return state
 
     if not persona:
@@ -168,6 +191,9 @@ def foundational_llm_node(state: Dict[str, Any]) -> Dict[str, Any]:
         state["final_response"] = (
             "I'm sorry, I'm having some configuration issues right now."
         )
+        # Record timing for error case
+        node_execution_time = time.time() - node_start_time
+        state["processing_metadata"]["node_timings"]["foundational_llm_node"] = node_execution_time
         return state
 
     try:
@@ -215,6 +241,11 @@ def foundational_llm_node(state: Dict[str, Any]) -> Dict[str, Any]:
         logger.debug(
             f"Foundational LLM response generated for {persona.character_name} (length: {len(state['final_response'])} chars)"
         )
+        
+        # Record timing for this node
+        node_execution_time = time.time() - node_start_time
+        state["processing_metadata"]["node_timings"]["foundational_llm_node"] = node_execution_time
+        
         return state
 
     except Exception as e:
@@ -227,6 +258,9 @@ def foundational_llm_node(state: Dict[str, Any]) -> Dict[str, Any]:
             fallback_msg = "I'm sorry, I'm having some technical difficulties right now. Please try again in a moment."
 
         state["final_response"] = fallback_msg
+        # Record timing for error case
+        node_execution_time = time.time() - node_start_time
+        state["processing_metadata"]["node_timings"]["foundational_llm_node"] = node_execution_time
         return state
 
 
@@ -243,6 +277,7 @@ def update_memory_node(state: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Updated state (memory operations are side effects)
     """
+    node_start_time = time.time()
     logger.info("Executing memory update node")
 
     # Track node execution
@@ -256,6 +291,9 @@ def update_memory_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
     if not current_user_input or not final_response:
         logger.warning("Incomplete conversation data for memory update")
+        # Record timing for early return
+        node_execution_time = time.time() - node_start_time
+        state["processing_metadata"]["node_timings"]["update_memory_node"] = node_execution_time
         return state
 
     try:
@@ -297,10 +335,17 @@ def update_memory_node(state: Dict[str, Any]) -> Dict[str, Any]:
         # Update metadata
         state["processing_metadata"]["memory_updated"] = True
 
+        # Record timing for this node
+        node_execution_time = time.time() - node_start_time
+        state["processing_metadata"]["node_timings"]["update_memory_node"] = node_execution_time
+
         return state
 
     except Exception as e:
         logger.error(f"Error in update_memory_node: {str(e)}")
         # Don't fail the pipeline if memory update fails
         state["processing_metadata"]["memory_update_error"] = str(e)
+        # Record timing for error case
+        node_execution_time = time.time() - node_start_time
+        state["processing_metadata"]["node_timings"]["update_memory_node"] = node_execution_time
         return state
