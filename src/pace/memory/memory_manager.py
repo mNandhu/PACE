@@ -336,7 +336,7 @@ class MemoryManager:
     def append_to_main_conversation_log(
         self,
         current_user_input: str,
-        sumire_response: str,
+        final_response: str,
         filepath: Optional[str] = None,
     ) -> None:
         """
@@ -344,7 +344,7 @@ class MemoryManager:
 
         Args:
             current_user_input: The user's input message
-            sumire_response: Sumire's response message
+            final_response: Sumire's response message
             filepath: Optional path to the conversation log file
         """
         if filepath is None:
@@ -360,7 +360,7 @@ class MemoryManager:
         new_entry = {
             "timestamp": datetime.now().isoformat(),
             "user_input": current_user_input,
-            "sumire_response": sumire_response,
+            "final_response": final_response,
             "user_id": self.user_id,
         }
 
@@ -401,11 +401,11 @@ class MemoryManager:
 
         for conversation in reversed(full_history):
             user_input = conversation.get("user_input", "")
-            sumire_response = conversation.get("sumire_response", "")
+            final_response = conversation.get("final_response", "")
 
             # Create message objects
             user_message = HumanMessage(content=user_input)
-            ai_message = AIMessage(content=sumire_response)
+            ai_message = AIMessage(content=final_response)
 
             # Calculate tokens for this turn
             turn_tokens = self._count_message_tokens(
