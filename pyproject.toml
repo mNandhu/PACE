@@ -16,6 +16,7 @@ dependencies = [
     "mem0ai[graph]>=0.1.113",
     "ollama>=0.5.1",
     "pre-commit>=4.2.0",
+    "pymilvus>=2.5.12",
     "python-dotenv>=1.1.1",
     "rich>=14.0.0",
 ]

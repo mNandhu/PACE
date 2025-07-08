@@ -58,12 +58,19 @@ class MemoryManager:
             copy.deepcopy(config) if config is not None else copy.deepcopy(mem0_config)
         )
 
-        # Dynamically set the collection name to isolate memories per user and persona
-        collection_name = f"pace_{self.user_id}_{self.persona_name}"
+        # Dynamically set the collection name using the template from config
         if "vector_store" in base_config and "config" in base_config["vector_store"]:
+            collection_template = base_config["vector_store"]["config"]["collection_name"]
+            collection_name = collection_template.format(
+                user_name=self.user_id,
+                persona_name=self.persona_name
+            )
             base_config["vector_store"]["config"]["collection_name"] = collection_name
 
         self.config = base_config
+
+        # Generate persona-specific file paths for conversation logs
+        self._setup_persona_file_paths()
 
         # Initialize tokenizer for token counting
         try:
@@ -74,6 +81,20 @@ class MemoryManager:
 
         # Initialize Mem0 instance
         self._initialize_mem0()
+
+    def _setup_persona_file_paths(self):
+        """
+        Setup persona-specific file paths for conversation logs and backups.
+        """
+        # Generate persona-specific conversation log file path
+        self.conversation_log_file = conversation_settings["persona_log_format"].format(
+            user_name=self.user_id, persona_name=self.persona_name
+        )
+
+        # Generate persona-specific backup format
+        self.backup_format = conversation_settings["backup_format"]
+
+        logger.info(f"Conversation log file set to: {self.conversation_log_file}")
 
     def _initialize_mem0(self) -> None:
         """
@@ -211,6 +232,15 @@ class MemoryManager:
             logger.error(error_msg)
             raise Exception(error_msg) from e
 
+    def get_conversation_log_path(self) -> str:
+        """
+        Get the path to the persona-specific conversation log file.
+
+        Returns:
+            Path to the conversation log file for this user-persona combination
+        """
+        return self.conversation_log_file
+
     def get_user_id(self) -> str:
         """
         Get the current user ID.
@@ -285,22 +315,22 @@ class MemoryManager:
         Create a timestamped backup of the existing conversation log.
 
         Args:
-            filepath: Optional path to the main conversation log
+            filepath: Optional path to the main conversation log. If None, uses persona-specific path.
 
         Returns:
             Path to the backup file created
         """
         if filepath is None:
-            filepath = conversation_settings["main_log_filename"]
+            filepath = self.conversation_log_file
 
         if not os.path.exists(filepath):
             logger.info(f"No existing conversation log found at {filepath}")
             return ""
 
-        # Create timestamped backup filename
+        # Create timestamped backup filename using persona-specific format
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup_filename = conversation_settings["backup_format"].format(
-            timestamp=timestamp
+        backup_filename = self.backup_format.format(
+            user_name=self.user_id, persona_name=self.persona_name, timestamp=timestamp
         )
 
         try:
@@ -324,13 +354,13 @@ class MemoryManager:
         Load and return the entire conversation history from the JSON file.
 
         Args:
-            filepath: Optional path to the conversation log file
+            filepath: Optional path to the conversation log file. If None, uses persona-specific path.
 
         Returns:
             List of conversation turns with metadata
         """
         if filepath is None:
-            filepath = conversation_settings["main_log_filename"]
+            filepath = self.conversation_log_file
 
         if not os.path.exists(filepath):
             logger.info(
@@ -363,11 +393,11 @@ class MemoryManager:
 
         Args:
             current_user_input: The user's input message
-            final_response: Sumire's response message
-            filepath: Optional path to the conversation log file
+            final_response: The persona's response message
+            filepath: Optional path to the conversation log file. If None, uses persona-specific path.
         """
         if filepath is None:
-            filepath = conversation_settings["main_log_filename"]
+            filepath = self.conversation_log_file
 
         # Ensure the directory exists
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -458,7 +488,7 @@ class MemoryManager:
         Load the full conversation history as LangChain message objects.
 
         Args:
-            filepath: Optional path to the conversation log file
+            filepath: Optional path to the conversation log file. If None, uses persona-specific path.
 
         Returns:
             List of BaseMessage objects representing the full conversation

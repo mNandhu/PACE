@@ -28,7 +28,6 @@ from rich.logging import RichHandler
 from src.pace.config.constants import (
     mem0_config,
     app_settings,
-    conversation_settings,
     persona_settings,
 )
 
@@ -52,6 +51,10 @@ DEBUG_MODE = os.getenv("PACE_DEBUG", "false").lower() in ("true", "1", "yes", "o
 # TODO: Merge this block with the one below
 # Configure logging based on debug mode
 if DEBUG_MODE:
+    # Ensure the log directory exists
+    log_dir = os.path.dirname(app_settings["verbose_log_file"])
+    os.makedirs(log_dir, exist_ok=True)
+
     # Debug mode: verbose logging to both file and console with Rich color
     logging.basicConfig(
         level=logging.DEBUG,
@@ -69,6 +72,9 @@ if DEBUG_MODE:
     )
     console.print("[dim]" + "=" * 60 + "[/dim]\n")
 else:
+    # Ensure the log directory exists
+    log_dir = os.path.dirname(app_settings["log_file"])
+    os.makedirs(log_dir, exist_ok=True)
     # Normal mode: less verbose logging
     logging.basicConfig(
         level=logging.WARNING,  # Only show warnings and errors
@@ -101,9 +107,9 @@ else:
     logging.getLogger("httpcore.connection").setLevel(logging.WARNING)
 
 # PACE system imports - LangGraph architecture
-from src.pace.memory.memory_manager import MemoryManager  # noqa: E402
 from src.pace.graph.graph import pace_app  # noqa: E402
 from src.pace.config.persona import Persona  # noqa: E402
+from src.pace.graph.singletons import initialize_singletons, get_memory_manager  # noqa: E402
 
 
 class PACE_CLI:
@@ -214,14 +220,94 @@ class PACE_CLI:
 
         console.print("[dim]⏱️  Initializing PACE system...[/dim]")
 
+        # Initialize global singletons with persona data
+        console.print("[dim]⏱️  Initializing system components with persona...[/dim]")
+        singleton_start = time.time()
+
+        try:
+            initialize_singletons(
+                user_name=self.user_name,
+                persona_name=self.persona.persona_name,
+                mem0_config=mem0_config,
+            )
+            console.print(
+                "[dim]✅ System components initialized with persona data[/dim]"
+            )
+        except Exception as e:
+            console.print(
+                f"[bold red]❌ Failed to initialize system components: {str(e)}[/bold red]"
+            )
+            sys.exit(1)
+
+        singleton_time = time.time() - singleton_start
+        console.print(
+            f"[dim]⏱️  Component initialization completed in {singleton_time:.3f}s[/dim]"
+        )  # Get the initialized memory manager from singletons
+        self.memory_manager = get_memory_manager()
+
+        # Validate that memory manager is correctly configured with persona
+        console.print(
+            "[dim]⏱️  Validating memory manager persona configuration...[/dim]"
+        )
+        validation_start = time.time()
+
+        try:
+            # Verify the memory manager has the correct user and persona
+            if self.memory_manager.user_id != self.user_name:
+                raise ValueError(
+                    f"Memory manager user mismatch: expected '{self.user_name}', got '{self.memory_manager.user_id}'"
+                )
+
+            if self.memory_manager.persona_name != self.persona.persona_name:
+                raise ValueError(
+                    f"Memory manager persona mismatch: expected '{self.persona.persona_name}', got '{self.memory_manager.persona_name}'"
+                )
+
+            # Verify the collection name is properly formatted for isolation
+            # Use the same template format as defined in constants
+            collection_template = mem0_config["vector_store"]["config"]["collection_name"]
+            expected_collection = collection_template.format(
+                user_name=self.user_name,
+                persona_name=self.persona.persona_name
+            )
+            actual_collection = self.memory_manager.config["vector_store"]["config"][
+                "collection_name"
+            ]
+            if actual_collection != expected_collection:
+                raise ValueError(
+                    f"Memory collection mismatch: expected '{expected_collection}', got '{actual_collection}'"
+                )
+
+            # Verify the conversation log path is persona-specific
+            expected_log_pattern = (
+                f"{self.user_name}_{self.persona.persona_name}_conversation_log.json"
+            )
+            actual_log_path = self.memory_manager.get_conversation_log_path()
+            if expected_log_pattern not in actual_log_path:
+                raise ValueError(
+                    f"Conversation log path not persona-specific: {actual_log_path}"
+                )
+
+            console.print(
+                f"[dim]✅ Memory manager validated for user '{self.user_name}' with persona '{self.persona.character_name}'[/dim]"
+            )
+            console.print(f"[dim]   Collection: {actual_collection}[/dim]")
+            console.print(f"[dim]   Conversation log: {actual_log_path}[/dim]")
+
+        except Exception as e:
+            console.print(
+                f"[bold red]❌ Memory manager validation failed: {str(e)}[/bold red]"
+            )
+            sys.exit(1)
+
+        validation_time = time.time() - validation_start
+        console.print(
+            f"[dim]⏱️  Memory manager validation completed in {validation_time:.3f}s[/dim]"
+        )
+
         # Backup existing conversation history on startup
         console.print("[dim]⏱️  Backing up existing conversation history...[/dim]")
         backup_start = time.time()
-        self.memory_manager = MemoryManager(
-            config=mem0_config,
-            user_name=self.user_name,
-            persona_name=self.persona.persona_name,
-        )
 
         try:
             backup_file = self.memory_manager.backup_main_conversation_log()
@@ -579,11 +665,11 @@ class PACE_CLI:
                 # Backup and clear conversation log
                 backup_file = self.memory_manager.backup_main_conversation_log()
                 if backup_file:
-                    # Clear the main log by writing empty list
+                    # Clear the persona-specific log by writing empty list
                     import json
 
                     with open(
-                        conversation_settings["main_log_filename"],
+                        self.memory_manager.conversation_log_file,
                         "w",
                         encoding="utf-8",
                     ) as f:
@@ -622,6 +708,17 @@ class PACE_CLI:
         info_table.add_row("User Name", self.user_name)
         info_table.add_row(
             "Persona Directives", str(len(self.persona.core_persona_directives))
+        )
+
+        # Memory Manager validation info
+        collection_name = self.memory_manager.config["vector_store"]["config"][
+            "collection_name"
+        ]
+        info_table.add_row("Memory Collection", collection_name)
+        info_table.add_row("Memory User ID", self.memory_manager.user_id)
+        info_table.add_row("Memory Persona", self.memory_manager.persona_name)
+        info_table.add_row(
+            "Conversation Log", self.memory_manager.get_conversation_log_path()
         )
 
         console.print(info_table)

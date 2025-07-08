@@ -10,7 +10,6 @@ import uuid
 
 from typing import Dict, Any
 from src.pace.config.constants import token_limits, graph_logic_settings
-from src.pace.config.persona_prompts import core_persona_directives
 from .tools import tools
 from .enhanced_utils import (
     process_memory_results,
@@ -68,6 +67,7 @@ def identify_context_node(state: Dict[str, Any]) -> Dict[str, Any]:
     state["processing_metadata"]["nodes_executed"].append("identify_context_node")
     current_user_input = state.get("current_user_input", "")
     session_id = state.get("session_id")
+    persona = state.get("persona")
 
     if not current_user_input:
         logger.warning("No user input provided to identify_context_node")
@@ -80,7 +80,14 @@ def identify_context_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         search_query = current_user_input  # Default to user input
 
-        logger.info(f"Memory lookup with query: {search_query}")
+        # Log with persona context
+        if persona:
+            logger.info(
+                f"Memory lookup for {persona.character_name} with query: {search_query}"
+            )
+        else:
+            logger.info(f"Memory lookup with query: {search_query}")
+
         search_results = memory_manager.search_memories(
             query_text=search_query,
             session_id=session_id,
@@ -99,7 +106,12 @@ def identify_context_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         if selected_memories:
             context_summary = "\n".join(selected_memories)
-            logger.info(f"Retrieved {len(selected_memories)} relevant memories")
+            if persona:
+                logger.info(
+                    f"Retrieved {len(selected_memories)} relevant memories for {persona.character_name}"
+                )
+            else:
+                logger.info(f"Retrieved {len(selected_memories)} relevant memories")
         else:
             context_summary = ""
             logger.info("No usable memories found in search results")
@@ -135,11 +147,26 @@ def foundational_llm_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # Get input data
     current_user_input = state.get("current_user_input", "")
     distilled_context_summary = state.get("distilled_context_summary", "")
+    persona = state.get("persona")
 
     if not current_user_input:
         logger.warning("No user input provided to foundational_llm_node")
+
+        # Use persona-aware fallback message
+        if persona:
+            fallback_msg = (
+                f"I'm sorry, I didn't receive any input from you, {persona.user_name}."
+            )
+        else:
+            fallback_msg = "I'm sorry, I didn't receive any input from you."
+
+        state["final_response"] = fallback_msg
+        return state
+
+    if not persona:
+        logger.error("No persona provided in state")
         state["final_response"] = (
-            "I'm sorry, I didn't receive any input from you, Kiruthik-sama."
+            "I'm sorry, I'm having some configuration issues right now."
         )
         return state
 
@@ -148,26 +175,29 @@ def foundational_llm_node(state: Dict[str, Any]) -> Dict[str, Any]:
         memory_manager = get_memory_manager()
         full_history = memory_manager.load_main_conversation_log()
 
-        # Get pruned conversation history - check if it's already in BaseMessage format
-
+        # Get pruned conversation history
         max_history_tokens = token_limits["conversation_history_max_tokens"]
         pruned_history = memory_manager.get_pruned_history_for_prompt(
             full_history, max_history_tokens
         )
 
-        # Build comprehensive message list using enhanced utility
-        response_instruction = "Respond as Sumire Yoshizawa, keeping in mind all the above context and maintaining consistency with past interactions."
+        # Build comprehensive message list using enhanced utility with persona data
+        response_instruction = f"Respond as {persona.character_name}, keeping in mind all the above context and maintaining consistency with past interactions."
 
         messages = build_conversation_messages(
-            persona_directives=core_persona_directives,
+            persona_directives=persona.core_persona_directives,
             context_summary=distilled_context_summary,
             history=pruned_history,
             current_input=current_user_input,
             response_instruction=response_instruction,
-        )  # Use global foundational LLM instance
+        )
+
+        # Use global foundational LLM instance
         foundational_llm = get_foundational_llm()
 
-        logger.debug(f"Sending {len(messages)} messages to Foundational LLM")
+        logger.debug(
+            f"Sending {len(messages)} messages to Foundational LLM for {persona.character_name}"
+        )
 
         # Get Persona's response using BaseMessage list
         response = foundational_llm.get_llm_response(messages, tools=tools)
@@ -178,23 +208,25 @@ def foundational_llm_node(state: Dict[str, Any]) -> Dict[str, Any]:
 
         # Update state with response - extract content for backward compatibility
         if hasattr(response, "content"):
-            state["final_response"] = (
-                response.content
-            )  # TODO: Remove this when BaseMessage is fully adopted
+            state["final_response"] = response.content # TODO: Remove this when BaseMessage is fully adopted
         else:
             state["final_response"] = str(response)
 
         logger.debug(
-            f"Foundational LLM response generated (length: {len(state['final_response'])} chars)"
+            f"Foundational LLM response generated for {persona.character_name} (length: {len(state['final_response'])} chars)"
         )
         return state
 
     except Exception as e:
         logger.error(f"Error in foundational_llm_node: {str(e)}")
-        # Provide a graceful fallback response
-        state["final_response"] = (
-            "I'm sorry, Kiruthik-sama, I'm having some technical difficulties right now. Please try again in a moment."
-        )
+
+        # Provide a persona-aware graceful fallback response
+        if persona:
+            fallback_msg = f"I'm sorry, {persona.user_name}, I'm having some technical difficulties right now. Please try again in a moment."
+        else:
+            fallback_msg = "I'm sorry, I'm having some technical difficulties right now. Please try again in a moment."
+
+        state["final_response"] = fallback_msg
         return state
 
 
@@ -220,6 +252,7 @@ def update_memory_node(state: Dict[str, Any]) -> Dict[str, Any]:
     current_user_input = state.get("current_user_input", "")
     final_response = state.get("final_response", "")
     session_id = state.get("session_id")
+    persona = state.get("persona")
 
     if not current_user_input or not final_response:
         logger.warning("Incomplete conversation data for memory update")
@@ -230,13 +263,22 @@ def update_memory_node(state: Dict[str, Any]) -> Dict[str, Any]:
         memory_manager = get_memory_manager()
 
         # 1. Immediate conversation history logging
-        logger.info("Updating main conversation log")
+        if persona:
+            logger.info(f"Updating main conversation log for {persona.character_name}")
+        else:
+            logger.info("Updating main conversation log")
+
         memory_manager.append_to_main_conversation_log(
             current_user_input=current_user_input, final_response=final_response
         )
 
         # 2. Long-term semantic memory storage (Mem0)
-        logger.info("Adding conversation to long-term semantic memory")
+        if persona:
+            logger.info(
+                f"Adding conversation to long-term semantic memory for {persona.character_name}"
+            )
+        else:
+            logger.info("Adding conversation to long-term semantic memory")
 
         # Construct messages for Mem0
         messages = [

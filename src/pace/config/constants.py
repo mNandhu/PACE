@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 load_dotenv()  # Load environment variables from .env file
 
 # Mem0 Configuration (for memory management)
+# Template Support: Use {user_name} and {persona_name} placeholders in collection names
+# These will be automatically replaced at runtime with actual user and persona values
 mem0_config = {
     "llm": {
         "provider": "litellm",
@@ -24,15 +26,16 @@ mem0_config = {
     "embedder": {
         "provider": "ollama",
         "config": {
-            "model": "hf.co/Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0",
-            "embedding_dims": 1024,
+            "model": "hf.co/Qwen/Qwen3-Embedding-8B-GGUF:f16", # "hf.co/Qwen/Qwen3-Embedding-0.6B-GGUF:Q8_0",
+            "ollama_base_url": "http://localhost:11435",
+            "embedding_dims": 4096 # 1024,
         },
     },
     "vector_store": {
         "provider": "milvus",
         "config": {
-            "collection_name": "pace_memories",
-            "embedding_model_dims": 1024,
+            "collection_name": "pace_{user_name}_{persona_name}",  # Template: {user_name} and {persona_name} are replaced at runtime
+            "embedding_model_dims": 4096,  #1024,
         },
     },
     "graph_store": {
@@ -71,8 +74,9 @@ token_limits = {
 
 # Conversation History Settings
 conversation_settings: dict[str, str] = {
-    "main_log_filename": "Assistant/chats/conversation_log.json",
-    "backup_format": "Assistant/chats/backup/conversation_backup_{timestamp}.json",
+    "main_log_filename": "Assistant/chats/conversation_log.json",  # Default/fallback TODO: Remove this backward compatibility
+    "persona_log_format": "Assistant/chats/{user_name}_{persona_name}_conversation_log.json",  # Template: {user_name} and {persona_name} are replaced at runtime
+    "backup_format": "Assistant/chats/backup/{user_name}_{persona_name}_conversation_backup_{timestamp}.json",  # Template: includes {timestamp} for backup files
     "max_history_turns_for_prompt": "20",  # Maximum conversation turns to include
 }
 
