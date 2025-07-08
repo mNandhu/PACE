@@ -2,6 +2,5 @@
 
 # Current
 
-- [ ] Remove occurences of "Sumire" from `main.py` and replace with `{{char}}`
-- [ ] Make persona prompts changeable
-  - [ ] Implement persona switching in Memory Manager
+- [ ] Move to TypedDicts in `constants.py` for better type safety and validation
+- [ ] Make Update Memory Node run in a different thread or Use RQ

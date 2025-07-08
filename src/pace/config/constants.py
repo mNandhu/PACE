@@ -6,6 +6,7 @@ including LLM configurations, Mem0 settings, token limits, and persona directive
 """
 
 # TODO: Make Configuration Management easier to update during runtime
+# TODO: Switch to TypedDicts for better type safety and validation
 import os
 from dotenv import load_dotenv
 
@@ -18,7 +19,7 @@ mem0_config = {
     "llm": {
         "provider": "litellm",
         "config": {
-            "model": "gemini/gemini-2.5-flash-preview-04-17",
+            "model": "gemini/gemini-2.5-flash",
             "temperature": 0.2,
             "max_tokens": 2000,
         },

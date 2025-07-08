@@ -12,7 +12,7 @@ import time
 from typing import Dict, Any
 from src.pace.config.constants import token_limits, graph_logic_settings
 from .tools import tools
-from .enhanced_utils import (
+from .utils import (
     process_memory_results,
     build_conversation_messages,
 )
